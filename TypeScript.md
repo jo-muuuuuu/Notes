@@ -295,3 +295,263 @@ This is a feature which you should know exists, but maybe hold off on using unle
 ### Less Common Primitives
 #### bigint
 #### symbol
+
+
+## Narrowing
+```
+function padLeft(padding: number | string, input: string): string {
+  if (typeof padding === "number") {
+    return " ".repeat(padding) + input;
+  }
+  return padding + input;
+}
+```
+Within our if check, TypeScript sees `typeof padding === "number"` and understands that as a special form of code called a type guard. TypeScript follows possible paths of execution that our programs can take to analyze the most specific possible type of a value at a given position. It looks at these special checks (called <i>type guards</i>) and assignments, and the process of refining types to more specific types than declared is called <i>narrowing</i>. In many editors we can observe these types as they change, and we’ll even do so in our examples.
+
+### `typeof` type guards
+TypeScript expects this to return a certain set of strings:
+- "string"
+- "number"
+- "bigint"
+- "boolean"
+- "symbol"
+- "undefined"
+- "object"
+- "function"
+
+### Truthiness narrowing
+In JS, arrays are `object` types.
+However, in TS, `typeof null` also returns `"object"`
+```
+function printAll(strs: string | string[] | null) {
+  if (typeof strs === "object") {
+    for (const s of strs) {
+// Error: 'strs' is possibly 'null'.
+      console.log(s);
+    }
+  } else if (typeof strs === "string") {
+    console.log(strs);
+  } else {
+    // do nothing
+  }
+}
+```
+
+Values like `0`, `NaN`, `""`, `0n (the bigint version of zero)`, `null`, `undefined` all coerce to false, and other values get coerced to true.
+
+So, we can use the following code:
+```
+function printAll(strs: string | string[] | null) {
+  if (strs && typeof strs === "object") {
+    for (const s of strs) {
+      console.log(s);
+    }
+  } else if (typeof strs === "string") {
+    console.log(strs);
+  }
+}
+```
+
+However, in the following code snippet, we wrapped the entire body of the function in a truthy check. 
+```
+function printAll(strs: string | string[] | null) {
+  // !!!!!!!!!!!!!!!!
+  //  DON'T DO THIS!
+  //   KEEP READING
+  // !!!!!!!!!!!!!!!!
+  if (strs) {
+    if (typeof strs === "object") {
+      for (const s of strs) {
+        console.log(s);
+      }
+    } else if (typeof strs === "string") {
+      console.log(strs);
+    }
+  }
+}
+```
+This has a subtle downside: we may no longer be handling the empty string case correctly.
+
+### Equality narrowing
+TypeScript also uses switch statements and equality checks like `===`, `!==` `==`, and `!=` to narrow types. 
+
+### The `in` operator narrowing
+JavaScript has an operator for determining if an object or its prototype chain has a property with a name: the `in` operator. 
+```
+type Fish = { swim: () => void };
+type Bird = { fly: () => void };
+ 
+function move(animal: Fish | Bird) {
+  if ("swim" in animal) {
+    return animal.swim();
+  }
+ 
+  return animal.fly();
+}
+```
+
+### `instanceof` narrowing
+JavaScript has an operator for checking whether or not a value is an “instance” of another value. More specifically, in JavaScript x instanceof Foo checks whether the prototype chain of x contains Foo.prototype. 
+```
+function logValue(x: Date | string) {
+  if (x instanceof Date) {
+    console.log(x.toUTCString());
+               
+(parameter) x: Date
+  } else {
+    console.log(x.toUpperCase());
+               
+(parameter) x: string
+  }
+}
+```
+
+### Assignments
+```
+let x = Math.random() < 0.5 ? 10 : "hello world!";
+    // let x: string | number
+x = 1;
+ 
+console.log(x);
+           //let x: number
+x = true;
+// ERROR: Type 'boolean' is not assignable to type 'string | number'.
+ 
+console.log(x);
+           // let x: string | number
+```
+Notice that each of these assignments is valid. Even though the observed type of x changed to number after our first assignment, we were still able to assign a string to x. This is because the declared type of x - the type that x started with - is string | number, and assignability is always checked against the declared type.
+
+If we’d assigned a boolean to x, we’d have seen an error since that wasn’t part of the declared type.
+
+### Control flow analysis
+The analysis of code based on reachability is called `control flow analysis`, and TypeScript uses this flow analysis to narrow types as it encounters type guards and assignments. When a variable is analyzed, control flow can split off and re-merge over and over again, and that variable can be observed to have a different type at each point.
+```
+function example() {
+  let x: string | number | boolean;
+ 
+  x = Math.random() < 0.5;
+  console.log(x);
+             // let x: boolean
+ 
+  if (Math.random() < 0.5) {
+    x = "hello";
+    console.log(x);
+               // let x: string
+  } else {
+    x = 100;
+    console.log(x);
+               // let x: number
+  }
+ 
+  return x;
+        // let x: string | number
+}
+```
+
+### Using type predicates
+To define a user-defined type guard, we simply need to define a function whose return type is a type predicate:
+```
+function isFish(pet: Fish | Bird): pet is Fish {
+  return (pet as Fish).swim !== undefined;
+}
+```
+
+`pet is Fish` is our type predicate in this example. A predicate takes the form `parameterName is Type`, where `parameterName` must be the name of a parameter from the current function signature.
+
+```
+// Both calls to 'swim' and 'fly' are now okay.
+let pet = getSmallPet();
+ 
+if (isFish(pet)) {
+  pet.swim();
+} else {
+  pet.fly();
+}
+```
+
+### Discriminated Unions
+When every type in a union contains a common property with literal types, TypeScript considers that to be a `discriminated union`, and can narrow out the members of the union.
+```
+interface Shape {
+  kind: "circle" | "square";
+  radius?: number;
+  sideLength?: number;
+}
+
+function getArea(shape: Shape) {
+  if (shape.kind === "circle") {
+    return Math.PI * shape.radius! ** 2;
+    // have to use non-null assertions (!)
+  }
+}
+```
+
+To avoid using `!` 
+```
+interface Circle {
+  kind: "circle";
+  radius: number;
+}
+ 
+interface Square {
+  kind: "square";
+  sideLength: number;
+}
+ 
+type Shape = Circle | Square;
+
+function getArea(shape: Shape) {
+  if (shape.kind === "circle") {
+    return Math.PI * shape.radius ** 2;
+                      
+(parameter) shape: Circle
+  }
+}
+```
+The important thing here was the encoding of Shape. Communicating the right information to TypeScript - that Circle and Square were really two separate types with specific kind fields - was crucial. Doing that lets us write type-safe TypeScript code that looks no different than the JavaScript we would’ve written otherwise. From there, the type system was able to do the “right” thing and figure out the types in each branch of our switch statement.
+
+### The `never` type
+When narrowing, you can reduce the options of a union to a point where you have removed all possibilities and have nothing left. In those cases, TypeScript will use a `never` type to represent a state which shouldn’t exist.
+
+### Exhaustiveness checking
+The `never` type is assignable to every type; however, no type is assignable to never (except never itself). This means you can use narrowing and rely on never turning up to do exhaustive checking in a switch statement.
+
+```
+type Shape = Circle | Square;
+ 
+function getArea(shape: Shape) {
+  switch (shape.kind) {
+    case "circle":
+      return Math.PI * shape.radius ** 2;
+    case "square":
+      return shape.sideLength ** 2;
+    default:
+      const _exhaustiveCheck: never = shape;
+      return _exhaustiveCheck;
+  }
+}
+```
+
+Adding a new member to the Shape union, will cause a TypeScript error:
+```
+interface Triangle {
+  kind: "triangle";
+  sideLength: number;
+}
+ 
+type Shape = Circle | Square | Triangle;
+ 
+function getArea(shape: Shape) {
+  switch (shape.kind) {
+    case "circle":
+      return Math.PI * shape.radius ** 2;
+    case "square":
+      return shape.sideLength ** 2;
+    default:
+      const _exhaustiveCheck: never = shape;
+            //Error: Type 'Triangle' is not assignable to type 'never'.
+      return _exhaustiveCheck;
+  }
+}
+```
