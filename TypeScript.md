@@ -1,4 +1,4 @@
-## TypeScript
+# TypeScript
 TypeScript is a superset of JavaScript. TypeScript offers all of JavaScript’s features, and an additional layer on top of these: <mark><b>TypeScript’s type system</b></mark>.
 
 TypeScript can infer types for you, or you can <mark><b>define types</b></mark>.
@@ -943,3 +943,313 @@ const fn: () => void = () => true; // ✅
 function fn2(): void { return true } // ❌
 ```
 
+## Object Types
+#### Anonymous Object Type
+```
+function greet(person: { name: string; age: number }) {
+  return "Hello " + person.name;
+}
+```
+
+#### Using Interface
+```
+interface Person {
+  name: string;
+  age: number;
+}
+ 
+function greet(person: Person) {
+  return "Hello " + person.name;
+}
+```
+
+#### Type Alias
+```
+type Person = {
+  name: string;
+  age: number;
+};
+ 
+function greet(person: Person) {
+  return "Hello " + person.name;
+}
+```
+
+### Property Modifiers
+Each property in an object type can specify a couple of things: the type, whether the property is optional, and whether the property can be written to.
+
+#### Optional Properties
+```
+interface PaintOptions {
+  shape: Shape;
+  xPos?: number;
+  yPos?: number;
+}
+```
+
+#### `readonly` Properties
+Properties can also be marked as readonly for TypeScript. While it won’t change any behavior at runtime, a property marked as readonly can’t be written to during type-checking.
+```
+interface SomeType {
+  readonly prop: string;
+}
+ 
+function doSomething(obj: SomeType) {
+  // We can read from 'obj.prop'.
+  console.log(`prop has the value '${obj.prop}'.`);
+ 
+  // But we can't re-assign it.
+  obj.prop = "hello";
+  // Cannot assign to 'prop' because it is a read-only property.
+}
+```
+
+Using the readonly modifier doesn’t necessarily imply that a value is totally immutable - or in other words, that its internal contents can’t be changed. It just means the property itself can’t be re-written to.
+
+In the following example, `resident` is a readonly property, which means you cannot assign a new value to `home.resident`.
+However, object `{ name: string; age: number }` is still mutable; the `name` and `age` properties are not readonly.
+
+```
+interface Home {
+  readonly resident: { name: string; age: number };
+}
+ 
+function visitForBirthday(home: Home) {
+  // We can read and update properties from 'home.resident'.
+  console.log(`Happy birthday ${home.resident.name}!`);
+  home.resident.age++;
+}
+ 
+function evict(home: Home) {
+  // But we can't write to the 'resident' property itself on a 'Home'.
+  home.resident = {
+  // Cannot assign to 'resident' because it is a read-only property.
+    name: "Victor the Evictor",
+    age: 42,
+  };
+}
+```
+
+#### Index Signatures
+`[index: type]: T`
+Sometimes you don’t know all the names of a type’s properties ahead of time, but you do know the shape of the values. In those cases you can use an index signature to describe the types of possible values, for example:
+```
+interface StringArray {
+  [index: number]: string;
+}
+ 
+const myArray: StringArray = getStringArray();
+const secondItem = myArray[1];
+          // const secondItem: string
+```
+
+However, properties of different types are acceptable if the index signature is a union of the property types:
+```
+interface NumberOrStringDictionary {
+  [index: string]: number | string;
+  length: number; // ok, length is a number
+  name: string; // ok, name is a string
+}
+```
+
+### Excess Property Checks
+Where and how an object is assigned a type can make a difference in the type system. One of the key examples of this is in excess property checking, which validates the object more thoroughly when it is created and assigned to an object type during creation.
+
+```
+interface SquareConfig {
+  color?: string;
+  width?: number;
+}
+ 
+function createSquare(config: SquareConfig): { color: string; area: number } {
+  return {
+    color: config.color || "red",
+    area: config.width ? config.width * config.width : 20,
+  };
+}
+ 
+let mySquare = createSquare({ colour: "red", width: 100 });
+// Object literal may only specify known properties, but 'colour' does not exist in type 'SquareConfig'. Did you mean to write
+// 'color'?
+```
+
+Getting around these checks is actually really simple. The easiest method is to just use a type assertion:
+```
+let mySquare = createSquare({ width: 100, opacity: 0.5 } as SquareConfig);
+```
+
+However, a better approach might be to add a string index signature if you’re sure that the object can have some extra properties that are used in some special way.
+```
+interface SquareConfig {
+  color?: string;
+  width?: number;
+  [propName: string]: unknown;
+}
+```
+
+<mark>I reckon the easiest way is just to make sure the input matches `SquareConfig` interface.</mark>
+
+
+### Extending Types
+The `extends` keyword on an interface allows us to effectively copy members from other named types, and add whatever new members we want. 
+
+```
+interface BasicAddress {
+  name?: string;
+  street: string;
+  city: string;
+  country: string;
+  postalCode: string;
+}
+ 
+interface AddressWithUnit extends BasicAddress {
+  unit: string;
+}
+```
+
+### Intersection Types
+`interfaces` allowed us to build up new types from other types by extending them. TypeScript provides another construct called intersection types that is mainly used to combine existing object types.
+
+An intersection type is defined using the `&` operator.
+
+```
+interface Colorful {
+  color: string;
+}
+interface Circle {
+  radius: number;
+}
+ 
+type ColorfulCircle = Colorful & Circle;
+```
+
+### Generic Object Types
+```
+interface Box<Type> {
+  contents: Type;
+}
+```
+
+Think of Box as a template for a real type, where Type is a placeholder that will get replaced with some other type. When TypeScript sees Box<string>, it will replace every instance of Type in Box<Type> with string, and end up working with something like { contents: string }. In other words, Box<string> and our earlier StringBox work identically.
+
+```
+interface Box<Type> {
+  contents: Type;
+}
+interface StringBox {
+  contents: string;
+}
+ 
+let boxA: Box<string> = { contents: "hello" };
+boxA.contents;
+         //(property) Box<string>.contents: string
+ 
+let boxB: StringBox = { contents: "world" };
+boxB.contents;
+        //(property) StringBox.contents: string
+```
+
+It is worth noting that type aliases can also be generic.
+```
+type Box<Type> = {
+  contents: Type;
+};
+```
+
+#### The Array Type
+It turns out we’ve been working with a type just like that throughout this handbook: the Array type. Whenever we write out types like `number[]` or `string[]`, that’s really just a shorthand for `Array<number>` and `Array<string>`.
+```
+function doSomething(value: Array<string>) {
+  // ...
+}
+ 
+let myArray: string[] = ["hello", "world"];
+ 
+// either of these work!
+doSomething(myArray);
+doSomething(new Array("hello", "world"));
+```
+
+#### The `ReadonlyArray` Type
+The `ReadonlyArray` is a special type that describes arrays that shouldn’t be changed.
+```
+function doStuff(values: ReadonlyArray<string>) {
+  // We can read from 'values'...
+  const copy = values.slice();
+  console.log(`The first value is ${values[0]}`);
+ 
+  // ...but we can't mutate 'values'.
+  values.push("hello!");
+// Property 'push' does not exist on type 'readonly string[]'.
+}
+```
+
+Unlike Array, there isn’t a `ReadonlyArray` constructor that we can use. Instead, we can assign regular Arrays to `ReadonlyArray`s.
+```
+const roArray: ReadonlyArray<string> = ["red", "green", "blue"];
+```
+
+Can also use `readonly Type[]`
+```
+function doStuff(values: readonly string[]) {
+  ...
+}
+```
+
+One last thing to note is that unlike the readonly property modifier, assignability isn’t bidirectional between regular Arrays and ReadonlyArrays.
+```
+let x: readonly string[] = [];
+let y: string[] = [];
+ 
+x = y;
+y = x;
+// The type 'readonly string[]' is 'readonly' and cannot be assigned to the mutable type 'string[]'.
+```
+
+#### Tuple Types
+A tuple type is another sort of `Array` type that knows exactly how many elements it contains, and exactly which types it contains at specific positions.
+```
+type StringNumberPair = [string, number];
+```
+
+Tuples can also have rest elements, which have to be an array/tuple type.
+```
+type StringNumberBooleans = [string, number, ...boolean[]];
+type StringBooleansNumber = [string, ...boolean[], number];
+type BooleansStringNumber = [...boolean[], string, number];
+```
+
+Why might optional and rest elements be useful? Well, it allows TypeScript to correspond tuples with parameter lists. Tuples types can be used in rest parameters and arguments, so that the following:
+```
+function readButtonInput(...args: [string, number, ...boolean[]]) {
+  const [name, version, ...input] = args;
+  // ...
+}
+```
+is basically equivalent to:
+```
+function readButtonInput(name: string, version: number, ...input: boolean[]) {
+  // ...
+}
+```
+
+#### `readonly` Tuple Types
+One final note about tuple types - tuple types have readonly variants, and can be specified by sticking a readonly modifier in front of them - just like with array shorthand syntax.
+```
+function doSomething(pair: readonly [string, number]) {
+  // ...
+}
+```
+
+Tuples tend to be created and left un-modified in most code, so annotating types as readonly tuples when possible is a good default. This is also important given that array literals with const assertions will be inferred with readonly tuple types.
+```
+let point = [3, 4] as const;
+ 
+function distanceFromOrigin([x, y]: [number, number]) {
+  return Math.sqrt(x ** 2 + y ** 2);
+}
+ 
+distanceFromOrigin(point);
+// Argument of type 'readonly [3, 4]' is not assignable to parameter of type '[number, number]'.
+// The type 'readonly [3, 4]' is 'readonly' and cannot be assigned to the mutable type '[number, number]'.
+```
