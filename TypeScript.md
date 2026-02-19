@@ -1253,3 +1253,471 @@ distanceFromOrigin(point);
 // Argument of type 'readonly [3, 4]' is not assignable to parameter of type '[number, number]'.
 // The type 'readonly [3, 4]' is 'readonly' and cannot be assigned to the mutable type '[number, number]'.
 ```
+
+
+## Type Manipulation
+TypeScript’s type system is very powerful because it allows expressing types in terms of other types.
+
+### Generics
+"Hello World" of Generics
+```
+function identity<Type>(arg: Type): Type {
+  return arg;
+}
+```
+
+Once we’ve written the generic identity function, we can call it in one of two ways. The first way is to pass all of the arguments, including the type argument, to the function:
+```
+let output = identity<string>("myString");
+      // let output: string
+```
+
+The second way is also perhaps the most common. Here we use <i>type argument inference</i>.
+```
+let output = identity("myString");
+      // let output: string
+```
+### Working with Generic Type Variables
+```
+function loggingIdentity<Type>(arg: Type): Type {
+  console.log(arg.length);
+              // Property 'length' does not exist on type 'Type'.
+  return arg;
+}
+```
+```
+function loggingIdentity<Type>(arg: Type[]): Type[] {
+  console.log(arg.length);
+  return arg;
+}
+// OR
+function loggingIdentity<Type>(arg: Array<Type>): Array<Type> {
+  console.log(arg.length); // Array has a .length, so no more error
+  return arg;
+}
+```
+
+### Generic Types
+Different ways to declare and use generic functions:
+```
+function identity<Type>(arg: Type): Type {
+  return arg;
+}
+
+let myIdentity: <Type>(arg: Type) => Type = identity;
+```
+```
+function identity<Type>(arg: Type): Type {
+  return arg;
+}
+ 
+let myIdentity: <Input>(arg: Input) => Input = identity;
+```
+```
+function identity<Type>(arg: Type): Type {
+  return arg;
+}
+ 
+let myIdentity: { <Type>(arg: Type): Type } = identity;
+```
+
+Using interfaces:
+```
+interface GenericIdentityFn {
+  <Type>(arg: Type): Type;
+}
+// OR
+interface GenericIdentityFn<Type> {
+  (arg: Type): Type;
+}
+ 
+function identity<Type>(arg: Type): Type {
+  return arg;
+}
+ 
+let myIdentity: GenericIdentityFn = identity;
+```
+
+### Generic Classes
+A generic class has a similar shape to a generic interface. Generic classes have a generic type parameter list in angle brackets (<>) following the name of the class.
+```
+class GenericNumber<NumType> {
+  zeroValue: NumType;
+  add: (x: NumType, y: NumType) => NumType;
+}
+ 
+let myGenericNumber = new GenericNumber<number>();
+myGenericNumber.zeroValue = 0;
+myGenericNumber.add = function (x, y) {
+  return x + y;
+};
+```
+
+### Generic Constraints
+For the earlier example of `loggingIdentity`:
+
+Instead of working with any and all types, we’d like to constrain this function to work with any and all types that also  have the .length property. As long as the type has this member, we’ll allow it, but it’s required to have at least this member. To do so, we must list our requirement as a constraint on what Type can be.
+
+To do so, we’ll create an interface that describes our constraint. Here, we’ll create an interface that has a single .length property and then we’ll use this interface and the extends keyword to denote our constraint:
+```
+interface Lengthwise {
+  length: number;
+}
+ 
+function loggingIdentity<Type extends Lengthwise>(arg: Type): Type {
+  console.log(arg.length); // Now we know it has a .length property, so no more error
+  return arg;
+}
+```
+
+### Using Type Parameters in Generic Constraints
+You can declare a type parameter that is constrained by another type parameter. For example, here we’d like to get a property from an object given its name. We’d like to ensure that we’re not accidentally grabbing a property that does not exist on the obj, so we’ll place a constraint between the two types:
+```
+function getProperty<Type, Key extends keyof Type>(obj: Type, key: Key) {
+  return obj[key];
+}
+ 
+let x = { a: 1, b: 2, c: 3, d: 4 };
+ 
+getProperty(x, "a");
+getProperty(x, "m");
+              // Argument of type '"m"' is not assignable to parameter of type '"a" | "b" | "c" | "d"'.
+```
+
+### Using Class Types in Generics
+When creating factories in TypeScript using generics, it is necessary to refer to class types by their constructor functions. For example,
+```
+function create<Type>(c: { new (): Type }): Type {
+  return new c();
+}
+```
+
+### Generic Parameter Defaults
+A generic parameter default follows the following rules:
+- A type parameter is deemed optional if it has a default.
+- Required type parameters must not follow optional type parameters.
+- Default types for a type parameter must satisfy the constraint for the type parameter, if it exists.
+- When specifying type arguments, you are only required to specify type arguments for the required type parameters. Unspecified type parameters will resolve to their default types.
+- If a default type is specified and inference cannot choose a candidate, the default type is inferred.
+- A class or interface declaration that merges with an existing class or interface declaration may introduce a default for an existing type parameter.
+- A class or interface declaration that merges with an existing class or interface declaration may introduce a new type parameter as long as it specifies a default.
+
+```
+declare function create(): Container<HTMLDivElement, HTMLDivElement[]>;
+declare function create<T extends HTMLElement>(element: T): Container<T, T[]>;
+declare function create<T extends HTMLElement, U extends HTMLElement>(
+  element: T,
+  children: U[]
+): Container<T, U[]>;
+```
+With generic parameter defaults we can reduce it to:
+```
+declare function create<T extends HTMLElement = HTMLDivElement, U extends HTMLElement[] = T[]>(
+  element?: T,
+  children?: U
+): Container<T, U>;
+ 
+const div = create();
+      // const div: Container<HTMLDivElement, HTMLDivElement[]>
+
+const p = create(new HTMLParagraphElement());
+     // const p: Container<HTMLParagraphElement, HTMLParagraphElement[]>
+```
+
+### Variance Annotations
+This is an advanced feature for solving a very specific problem, and should only be used in situations where you’ve identified a reason to use it
+
+### Keyof Type Operator
+The keyof operator takes an object type and produces a string or numeric literal union of its keys. The following type P is the same type as type P = "x" | "y":
+```
+type Point = { x: number; y: number };
+type P = keyof Point;
+    
+type P = keyof Point
+```
+If the type has a string or number index signature, keyof will return those types instead:
+```
+type Arrayish = { [n: number]: unknown };
+type A = keyof Arrayish;
+    
+type A = number
+ 
+type Mapish = { [k: string]: boolean };
+type M = keyof Mapish;
+    
+type M = string | number
+```
+Note that in this example, M is string | number — this is because JavaScript object keys are always coerced to a string, so obj[0] is always the same as obj["0"].
+
+`keyof` types become especially useful when combined with mapped types, which we’ll learn more about later.
+
+### Typeof Type Operator
+TypeScript adds a typeof operator you can use in a type context to refer to the type of a variable or property. 
+```
+let s = "hello";
+let n: typeof s;
+   
+let n: string
+```
+This isn’t very useful for basic types, but combined with other type operators, you can use typeof to conveniently express many patterns. For an example, let’s start by looking at the predefined type ReturnType<T>. It takes a function type and produces its return type:
+```
+type Predicate = (x: unknown) => boolean;
+type K = ReturnType<Predicate>;
+```
+
+### Indexed Access Types
+We can use an indexed access type to look up a specific property on another type:
+```
+type Person = { age: number; name: string; alive: boolean };
+type Age = Person["age"];
+     // type Age = number
+```
+
+The indexing type is itself a type, so we can use unions, keyof, or other types entirely:
+```
+type I1 = Person["age" | "name"];
+     // type I1 = string | number
+ 
+type I2 = Person[keyof Person];
+     // type I2 = string | number | boolean
+ 
+type AliveOrName = "alive" | "name";
+type I3 = Person[AliveOrName];
+     // type I3 = string | boolean
+```
+
+Another example of indexing with an arbitrary type is using number to get the type of an array’s elements. We can combine this with typeof to conveniently capture the element type of an array literal:
+```
+const MyArray = [
+  { name: "Alice", age: 15 },
+  { name: "Bob", age: 23 },
+  { name: "Eve", age: 38 },
+];
+
+// Index Signatures
+// type ArrayLike<T> = {
+//  [index: number]: T;
+// }
+ 
+type Person = typeof MyArray[number];
+       // type Person = {
+       //   name: string;
+       //   age: number;
+       // }
+type Age = typeof MyArray[number]["age"];
+     // type Age = number
+// Or
+type Age2 = Person["age"];
+   // type Age2 = number
+```
+
+### Conditional Types
+<i>Conditional types</i> help describe the relation between the types of inputs and outputs.
+Conditional types take a form that looks a little like conditional expressions `(condition ? trueExpression : falseExpression)` in JavaScript
+```
+interface Animal {
+  live(): void;
+}
+interface Dog extends Animal {
+  woof(): void;
+}
+ 
+type Example1 = Dog extends Animal ? number : string;
+        // type Example1 = number
+ 
+type Example2 = RegExp extends Animal ? number : string;
+        // type Example2 = string
+```
+
+We can then use that conditional type to simplify our overloads down to a single function with no overloads.
+```
+function createLabel<T extends number | string>(idOrName: T): NameOrId<T> {
+  throw "unimplemented";
+}
+ 
+let a = createLabel("typescript");
+   // let a: NameLabel
+ 
+let b = createLabel(2.8);
+   // let b: IdLabel
+ 
+let c = createLabel(Math.random() ? "hello" : 42);
+   // let c: NameLabel | IdLabel
+```
+
+#### Conditional Type Constraints
+```
+type MessageOf<T> = T["message"];
+// Type '"message"' cannot be used to index type 'T'.
+```
+In this example, TypeScript errors because T isn’t known to have a property called message. We could constrain T, and TypeScript would no longer complain:
+```
+type MessageOf<T extends { message: unknown }> = T["message"];
+ 
+interface Email {
+  message: string;
+}
+ 
+type EmailMessageContents = MessageOf<Email>;
+              // type EmailMessageContents = string
+```
+However, what if we wanted MessageOf to take any type, and default to something like never if a message property isn’t available? We can do this by moving the constraint out and introducing a conditional type:
+```
+type MessageOf<T> = T extends { message: unknown } ? T["message"] : never;
+ 
+interface Email {
+  message: string;
+}
+ 
+interface Dog {
+  bark(): void;
+}
+ 
+type EmailMessageContents = MessageOf<Email>;
+              // type EmailMessageContents = string
+ 
+type DogMessageContents = MessageOf<Dog>;
+             // type DogMessageContents = never
+```
+
+#### Distributive Conditional Types
+```
+type ToArray<Type> = Type extends any ? Type[] : never;
+type StrArrOrNumArr = ToArray<string | number>;
+           // type StrArrOrNumArr = string[] | number[]
+```
+
+Typically, distributivity is the desired behavior. To avoid that behavior, you can surround each side of the extends keyword with square brackets.
+```
+type ToArrayNonDist<Type> = [Type] extends [any] ? Type[] : never;
+ 
+// 'ArrOfStrOrNum' is no longer a union.
+type ArrOfStrOrNum = ToArrayNonDist<string | number>;
+          // type ArrOfStrOrNum = (string | number)[]
+```
+
+### Mapped Types
+A mapped type is a generic type which uses a union of PropertyKeys (frequently created via a keyof) to iterate through keys to create a type:
+```
+type OptionsFlags<Type> = {
+  [Property in keyof Type]: boolean;
+};
+```
+In this example, OptionsFlags will take all the properties from the type Type and change their values to be a boolean.
+```
+type Features = {
+  darkMode: () => void;
+  newUserProfile: () => void;
+};
+ 
+type FeatureOptions = OptionsFlags<Features>;         
+  // type FeatureOptions = {
+  //    darkMode: boolean;
+  //    newUserProfile: boolean;
+  // }
+```
+
+#### Mapping Modifiers
+There are two additional modifiers which can be applied during mapping: readonly and ? which affect mutability and optionality respectively.
+
+You can remove or add these modifiers by prefixing with - or +. If you don’t add a prefix, then + is assumed.
+```
+// Removes 'readonly' attributes from a type's properties
+type CreateMutable<Type> = {
+  -readonly [Property in keyof Type]: Type[Property];
+};
+ 
+type LockedAccount = {
+  readonly id: string;
+  readonly name: string;
+};
+ 
+type UnlockedAccount = CreateMutable<LockedAccount>;
+           // type UnlockedAccount = {
+           //      id: string;
+           //      name: string;
+           // }
+```
+```
+// Removes 'optional' attributes from a type's properties
+type Concrete<Type> = {
+  [Property in keyof Type]-?: Type[Property];
+};
+ 
+type MaybeUser = {
+  id: string;
+  name?: string;
+  age?: number;
+};
+ 
+type User = Concrete<MaybeUser>;
+      // type User = {
+      //   id: string;
+      //   name: string;
+      //   age: number;
+      // }
+```
+
+#### Key Remapping via `as`
+In TypeScript 4.1 and onwards, you can re-map keys in mapped types with an as clause in a mapped type:
+```
+type MappedTypeWithNewProperties<Type> = {
+    [Properties in keyof Type as NewKeyType]: Type[Properties]
+}
+```
+
+You can leverage features like template literal types to create new property names from prior ones:
+```
+type Getters<Type> = {
+    [Property in keyof Type as `get${Capitalize<string & Property>}`]: () => Type[Property]
+};
+ 
+interface Person {
+    name: string;
+    age: number;
+    location: string;
+}
+ 
+type LazyPerson = Getters<Person>;
+         
+// type LazyPerson = {
+//    getName: () => string;
+//    getAge: () => number;
+//    getLocation: () => string;
+// }
+```
+You can filter out keys by producing never via a conditional type:
+```
+// Remove the 'kind' property
+type RemoveKindField<Type> = {
+    [Property in keyof Type as Exclude<Property, "kind">]: Type[Property]
+};
+ 
+interface Circle {
+    kind: "circle";
+    radius: number;
+}
+ 
+type KindlessCircle = RemoveKindField<Circle>;
+           
+// type KindlessCircle = {
+//     radius: number;
+// }
+```
+You can map over arbitrary unions, not just unions of string | number | symbol, but unions of any type:
+```
+type EventConfig<Events extends { kind: string }> = {
+    [E in Events as E["kind"]]: (event: E) => void;
+}
+ 
+type SquareEvent = { kind: "square", x: number, y: number };
+type CircleEvent = { kind: "circle", radius: number };
+ 
+type Config = EventConfig<SquareEvent | CircleEvent>
+       
+// type Config = {
+//     square: (event: SquareEvent) => void;
+//     circle: (event: CircleEvent) => void;
+// }
+```
+
